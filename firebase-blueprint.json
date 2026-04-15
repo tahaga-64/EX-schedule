@@ -1,0 +1,55 @@
+{
+  "entities": {
+    "MonthData": {
+      "title": "Month Data",
+      "description": "Stores all schedule and goal data for a specific month.",
+      "type": "object",
+      "properties": {
+        "schedule": {
+          "type": "object",
+          "description": "Schedule data per member."
+        },
+        "memos": {
+          "type": "object",
+          "description": "Memos per member and day."
+        },
+        "dones": {
+          "type": "object",
+          "description": "Completion status per member and day."
+        },
+        "goals": {
+          "type": "object",
+          "description": "Goal rows per member."
+        },
+        "nextPlan": {
+          "type": "object",
+          "description": "Next plan per member."
+        },
+        "teamGoal": {
+          "type": "string",
+          "description": "The overall team goal for the month."
+        },
+        "trainingLabels": {
+          "type": "object",
+          "description": "Custom labels for training/events."
+        },
+        "trainingLocations": {
+          "type": "object",
+          "description": "Custom locations for training/events."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last update timestamp."
+        }
+      },
+      "required": ["schedule", "teamGoal"]
+    }
+  },
+  "firestore": {
+    "/months/{monthId}": {
+      "schema": "MonthData",
+      "description": "Collection of monthly data documents."
+    }
+  }
+}

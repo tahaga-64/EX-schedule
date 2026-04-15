@@ -1,0 +1,73 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: months
+    // Document ID: {year}-{month} (e.g., "2026-4")
+    // Fields:
+    //   - schedule: map (required) - Schedule data per member
+    //   - memos: map (optional) - Memos per member and day
+    //   - dones: map (optional) - Completion status per member and day
+    //   - goals: map (optional) - Goal rows per member
+    //   - nextPlan: map (optional) - Next plan per member
+    //   - teamGoal: string (required) - The overall team goal
+    //   - trainingLabels: map (optional) - Custom labels
+    //   - trainingLocations: map (optional) - Custom locations
+    //   - updatedAt: timestamp (optional) - Last update time
+    //
+    // Collection: test
+    // Document ID: connection
+    // Fields: any
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isEmailVerified() {
+      return isAuthenticated() && request.auth.token.email_verified == true;
+    }
+
+    // Default admin check based on user email
+    function isAdmin() {
+      return isAuthenticated() && 
+             (request.auth.token.email == "taoki0183@gmail.com" && isEmailVerified());
+    }
+
+    function isValidMonthData(data) {
+      return data.keys().hasAll(['schedule', 'teamGoal']) &&
+             data.schedule is map &&
+             data.teamGoal is string &&
+             data.teamGoal.size() <= 2000;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /months/{monthId} {
+      // Allow public read access for viewing the schedule
+      allow read: if true;
+      // Allow anyone to write (unauthenticated access allowed per user request)
+      allow write: if true; // Relaxed for public editing
+    }
+
+    match /test/connection {
+      allow read: if true; // Allow public read for connection test
+    }
+
+    // Deny all other access by default
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}
