@@ -50,6 +50,22 @@
     "/months/{monthId}": {
       "schema": "MonthData",
       "description": "Collection of monthly data documents."
+    },
+    "/settings/global": {
+      "schema": {
+        "type": "object",
+        "properties": {
+          "memberStations": {
+            "type": "object",
+            "description": "Global dictionary of member stations."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "description": "Global settings document for persistent data across months."
     }
   }
 }

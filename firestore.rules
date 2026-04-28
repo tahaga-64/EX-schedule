@@ -65,6 +65,10 @@ service cloud.firestore {
       allow read: if true; // Allow public read for connection test
     }
 
+    match /settings/{docId} {
+      allow read, write: if true;
+    }
+
     // Deny all other access by default
     match /{path=**} {
       allow read, write: if false;
