@@ -1467,7 +1467,7 @@ function App() {
                   <table className="w-full text-[9px] border-separate border-spacing-0 min-w-[max-content]">
                     <thead className="relative z-30">
                       <tr className="bg-accent-l text-accent">
-                        <th className="p-1.5 border border-border font-bold sticky left-0 top-0 bg-accent-l z-50 min-w-[100px] text-left">
+                        <th className="p-1 border border-border font-bold sticky left-0 top-0 bg-accent-l z-50 min-w-[80px] text-[8px] text-left">
                           スタッフ名 / 集計
                         </th>
                         {Array.from({ length: daysInMonth }).map((_, i) => {
@@ -1476,7 +1476,7 @@ function App() {
                           const isSat = dow === 5;
                           const isSun = dow === 6;
                           return (
-                            <th key={day} className={`p-1 border border-border font-bold text-center min-w-[70px] sticky top-0 z-30 ${
+                            <th key={day} className={`p-0.5 border border-border font-bold text-center min-w-[55px] text-[8px] sticky top-0 z-30 ${
                               isSun ? 'text-red-600 bg-red-50' : isSat ? 'text-blue-600 bg-blue-50' : 'bg-accent-l'
                             }`}>
                               {day}({['月','火','水','木','金','土','日'][dow]})
@@ -1488,7 +1488,7 @@ function App() {
                     <tbody>
                       {/* Row for workingCount (稼働数) */}
                       <tr className="bg-bg/50">
-                        <td className="p-1.5 border border-border sticky left-0 bg-bg z-20 font-bold text-text">
+                        <td className="p-1 border border-border sticky left-0 bg-bg z-20 font-bold text-text text-[8px]">
                           稼働人数 (合計)
                         </td>
                         {Array.from({ length: daysInMonth }).map((_, i) => {
@@ -1500,7 +1500,7 @@ function App() {
                             }
                           });
                           return (
-                            <td key={i} className="p-1 border border-border text-center font-bold text-text">
+                            <td key={i} className="p-0.5 border border-border text-center font-bold text-text text-[8px]">
                               {count}人
                             </td>
                           );
@@ -1515,17 +1515,17 @@ function App() {
 
                         return (
                           <tr key={name} className="hover:bg-bg/40 transition-colors">
-                            <td className="p-1.5 border border-border sticky left-0 bg-white z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
-                              <div className="flex flex-col gap-0.5">
-                                <div className="flex items-center justify-between gap-1">
-                                  <div className="font-bold text-accent text-[9px] truncate max-w-[50px]">{name.replace('　', '')}</div>
-                                  <div className="flex gap-1 text-[7.5px] font-bold leading-none shrink-0">
+                            <td className="p-1 border border-border sticky left-0 bg-white z-20 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
+                              <div className="flex flex-col gap-0.25">
+                                <div className="flex items-center justify-between gap-0.5">
+                                  <div className="font-bold text-accent text-[8.5px] truncate max-w-[45px]">{name.replace('　', '')}</div>
+                                  <div className="flex gap-0.5 text-[7.5px] font-bold leading-none shrink-0">
                                     <span className="text-gray-500 whitespace-nowrap">公:{normalCount}</span>
                                     <span className="text-pink-600 whitespace-nowrap">希:{requestCount}</span>
                                   </div>
                                 </div>
                                 <LocalInput
-                                  className="w-full px-1 py-0.5 rounded border border-accent/20 text-[7.5px] outline-none focus:border-accent bg-white/80 font-normal h-3.5"
+                                  className="w-full px-0.5 py-0.25 rounded border border-accent/20 text-[7px] outline-none focus:border-accent bg-white/80 font-normal h-3"
                                   value={globalStations[name] || currentMonthData.memberStations?.[name] || ''}
                                   onChange={(val: string) => handleMemberStationChange(name, val)}
                                   placeholder="駅..."
