@@ -5,14 +5,10 @@
 
 import React, { useState, useEffect, useMemo, Component, ErrorInfo, ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Calendar, 
-  Target, 
-  Rocket, 
-  CheckCircle2, 
-  Plus, 
-  Trash2, 
-  Star,
+import {
+  Calendar,
+  CheckCircle2,
+  Plus,
   ChevronRight,
   Info,
   Save,
@@ -21,12 +17,14 @@ import {
   AlertCircle,
   Upload,
   Share2,
-  X
+  X,
+  Lightbulb
 } from 'lucide-react';
-import { 
-  TRAINING_LABELS, 
-  TRAINING_LOCATIONS, 
-  MEMBERS, 
+import {
+  TRAINING_LABELS,
+  TRAINING_LOCATIONS,
+  MEMBERS,
+  BOSS_MEMBERS,
   StatusType,
   TYPE_LABEL,
   TYPE_CLASS,
@@ -48,6 +46,15 @@ import {
 } from 'firebase/firestore';
 
 // --- Types ---
+interface EventProposal {
+  eventName: string;
+  overview: string;
+  required: string;
+  cost: string;
+  venue: '' | '量販店' | 'モール';
+  memo: string;
+}
+
 interface MonthData {
   schedule: Record<string, { type: StatusType; detail: string }[]>;
   memos: Record<string, Record<number, string>>;
@@ -58,7 +65,18 @@ interface MonthData {
   trainingLabels?: Record<string, string>;
   trainingLocations?: Record<string, string>;
   memberStations?: Record<string, string>;
+  eventProposals?: Record<string, EventProposal[]>;
+  eventComments?: Record<string, string>;
 }
+
+const DEFAULT_PROPOSAL: EventProposal = {
+  eventName: '',
+  overview: '',
+  required: '',
+  cost: '',
+  venue: '',
+  memo: ''
+};
 
 enum OperationType {
   CREATE = 'create',
@@ -424,26 +442,26 @@ export default function AppWrapper() {
 }
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'schedule' | 'goal' | 'next' | 'overall'>('schedule');
+  const [activeTab, setActiveTab] = useState<'schedule' | 'overall' | 'event'>('schedule');
   const [currentSchedMember, setCurrentSchedMember] = useState(MEMBERS[0]);
-  const [currentGoalMember, setCurrentGoalMember] = useState(MEMBERS[0]);
+  const [currentEventMember, setCurrentEventMember] = useState(MEMBERS[0]);
   const [hideDone, setHideDone] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
-  
+
   // Initialize from URL if present
   const [currentYear, setCurrentYear] = useState(() => {
     if (typeof window === 'undefined') return 2026;
     const params = new URLSearchParams(window.location.search);
     const y = params.get('year');
     const parsed = y ? parseInt(y) : NaN;
-    return isNaN(parsed) ? new Date().getFullYear() : parsed;
+    return isNaN(parsed) ? 2026 : parsed;
   });
   const [currentMonth, setCurrentMonth] = useState(() => {
-    if (typeof window === 'undefined') return 3;
+    if (typeof window === 'undefined') return 4;
     const params = new URLSearchParams(window.location.search);
     const m = params.get('month');
     const parsed = m ? parseInt(m) - 1 : NaN;
-    if (isNaN(parsed)) return new Date().getMonth();
+    if (isNaN(parsed)) return 4; // default to May
     return Math.max(0, Math.min(11, parsed));
   });
 
@@ -519,52 +537,41 @@ function App() {
 
     const migratedSched: Record<string, { type: StatusType, detail: string }[]> = {};
     
-    if (data) {
-      // Migrate schedule if needed
-      for (const member of MEMBERS) {
-        const s = data.schedule?.[member];
-        const daysInMonth = getDaysInMonth(currentYear, currentMonth);
-        
-        if (Array.isArray(s) && s.length > 0) {
-          migratedSched[member] = s.map((item: any) => {
-            if (typeof item === 'object' && item !== null) {
-              if ('type' in item) return item as { type: StatusType, detail: string };
-              const detail = item.detail || item.status || '';
-              return { type: getType(detail), detail: String(detail) };
-            }
-            return { type: getType(item), detail: String(item || '') };
-          });
-          
-          // Ensure correct length
-          if (migratedSched[member].length < daysInMonth) {
-            const extra = Array(daysInMonth - migratedSched[member].length).fill(null).map(() => ({ type: 'rest' as StatusType, detail: '' }));
-            migratedSched[member] = [...migratedSched[member], ...extra];
-          } else if (migratedSched[member].length > daysInMonth) {
-            migratedSched[member] = migratedSched[member].slice(0, daysInMonth);
+    const daysInMonthVal = getDaysInMonth(currentYear, currentMonth);
+    const initMember = (member: string, fromData: any) => {
+      const s = fromData;
+      if (Array.isArray(s) && s.length > 0) {
+        const migrated = s.map((item: any) => {
+          if (typeof item === 'object' && item !== null) {
+            if ('type' in item) return item as { type: StatusType, detail: string };
+            const detail = item.detail || item.status || '';
+            return { type: getType(detail), detail: String(detail) };
           }
-        } else {
-          // Fallback to initial data for April 2026 if missing or empty
-          if (isApril2026 && INITIAL_SCHEDULE_DATA[member]) {
-            const initial = INITIAL_SCHEDULE_DATA[member];
-            migratedSched[member] = initial.map(s => ({ type: getType(s), detail: s }));
-            
-            // Ensure correct length for initial data too
-            if (migratedSched[member].length < daysInMonth) {
-              const extra = Array(daysInMonth - migratedSched[member].length).fill(null).map(() => ({ type: 'rest' as StatusType, detail: '' }));
-              migratedSched[member] = [...migratedSched[member], ...extra];
-            } else if (migratedSched[member].length > daysInMonth) {
-              migratedSched[member] = migratedSched[member].slice(0, daysInMonth);
-            }
-          } else {
-            migratedSched[member] = Array(daysInMonth).fill(null).map(() => ({ type: 'rest', detail: '' }));
-          }
+          return { type: getType(item), detail: String(item || '') };
+        });
+        if (migrated.length < daysInMonthVal) {
+          const extra = Array(daysInMonthVal - migrated.length).fill(null).map(() => ({ type: 'rest' as StatusType, detail: '' }));
+          return [...migrated, ...extra];
         }
+        return migrated.slice(0, daysInMonthVal);
+      }
+      if (isApril2026 && INITIAL_SCHEDULE_DATA[member]) {
+        const initial = INITIAL_SCHEDULE_DATA[member];
+        const mapped = initial.map(s => ({ type: getType(s), detail: s }));
+        if (mapped.length < daysInMonthVal) {
+          const extra = Array(daysInMonthVal - mapped.length).fill(null).map(() => ({ type: 'rest' as StatusType, detail: '' }));
+          return [...mapped, ...extra];
+        }
+        return mapped.slice(0, daysInMonthVal);
+      }
+      return Array(daysInMonthVal).fill(null).map(() => ({ type: 'rest' as StatusType, detail: '' }));
+    };
+
+    if (data) {
+      for (const member of [...MEMBERS, ...BOSS_MEMBERS]) {
+        migratedSched[member] = initMember(member, data.schedule?.[member]);
       }
 
-      // If it's May onwards and the data was accidentally initialized with April data,
-      // we might want to clear it, but for now we just respect what's in Firestore.
-      // However, if the user explicitly wants "blank", they can clear it.
-      
       return {
         ...data,
         schedule: migratedSched,
@@ -576,27 +583,14 @@ function App() {
         trainingLabels: data.trainingLabels || (isAfterApril2026 ? {} : TRAINING_LABELS),
         trainingLocations: data.trainingLocations || (isAfterApril2026 ? {} : TRAINING_LOCATIONS),
         memberStations: data.memberStations || {},
+        eventProposals: data.eventProposals || {},
+        eventComments: data.eventComments || {},
       } as MonthData;
     }
-    
+
     // Default data (when no data in Firestore)
-    const daysInMonth = getDaysInMonth(currentYear, currentMonth);
-    for (const member of MEMBERS) {
-      if (isApril2026) {
-        const initial = INITIAL_SCHEDULE_DATA[member] || [];
-        migratedSched[member] = initial.map(s => ({ type: getType(s), detail: s }));
-        
-        // Ensure correct length
-        if (migratedSched[member].length < daysInMonth) {
-          const extra = Array(daysInMonth - migratedSched[member].length).fill(null).map(() => ({ type: 'rest' as StatusType, detail: '' }));
-          migratedSched[member] = [...migratedSched[member], ...extra];
-        } else if (migratedSched[member].length > daysInMonth) {
-          migratedSched[member] = migratedSched[member].slice(0, daysInMonth);
-        }
-      } else {
-        // For other months (especially 5月以降), start with blank
-        migratedSched[member] = Array(daysInMonth).fill(null).map(() => ({ type: 'rest', detail: '' }));
-      }
+    for (const member of [...MEMBERS, ...BOSS_MEMBERS]) {
+      migratedSched[member] = initMember(member, null);
     }
 
     return {
@@ -609,6 +603,8 @@ function App() {
       trainingLabels: isAfterApril2026 ? {} : TRAINING_LABELS,
       trainingLocations: isAfterApril2026 ? {} : TRAINING_LOCATIONS,
       memberStations: {},
+      eventProposals: {},
+      eventComments: {},
     } as MonthData;
   }, [allData, monthKey, currentMonth, currentYear]);
 
@@ -775,53 +771,23 @@ function App() {
     updateCurrentMonthData({ dones: newDones });
   };
 
-  const handleTeamGoalSave = () => {
-    updateCurrentMonthData({ teamGoal: currentMonthData.teamGoal });
-    triggerSaveOk('team-goal');
-  };
-
-  const handleIndividualGoalChange = (member: string, index: number, field: keyof GoalRow, val: any) => {
-    const newGoals = { ...currentMonthData.goals };
-    const memberGoals = [...(newGoals[member] || [])];
-    memberGoals[index] = { ...memberGoals[index], [field]: val };
-    newGoals[member] = memberGoals;
-    updateCurrentMonthData({ goals: newGoals });
-  };
-
-  const addGoalRow = (member: string) => {
-    const newGoals = { ...currentMonthData.goals };
-    const memberGoals = [...(newGoals[member] || [])];
-    memberGoals.push({ content: '', person: '', deadline: '', stars: 0, note: '' });
-    newGoals[member] = memberGoals;
-    updateCurrentMonthData({ goals: newGoals });
-  };
-
-  const deleteGoalRow = (member: string, index: number) => {
-    const newGoals = { ...currentMonthData.goals };
-    const memberGoals = [...(newGoals[member] || [])];
-    memberGoals.splice(index, 1);
-    newGoals[member] = memberGoals;
-    updateCurrentMonthData({ goals: newGoals });
-  };
-
-  const handleGoalSave = (member: string) => {
-    // Already auto-saving, but can show feedback
-    triggerSaveOk('goal');
-  };
-
-  const handleNextPlanChange = (member: string, val: string) => {
-    const newNextPlan = { ...currentMonthData.nextPlan, [member]: val };
-    updateCurrentMonthData({ nextPlan: newNextPlan });
-  };
-
-  const handleNextPlanSave = () => {
-    updateCurrentMonthData({ nextPlan: currentMonthData.nextPlan });
-    triggerSaveOk('next');
-  };
-
   const handleMemberStationChange = (member: string, val: string) => {
     const newStations = { ...(currentMonthData.memberStations || {}), [member]: val };
     updateCurrentMonthData({ memberStations: newStations });
+  };
+
+  const handleEventProposalChange = (member: string, slotIndex: number, field: keyof EventProposal, val: string) => {
+    const newProposals = { ...(currentMonthData.eventProposals || {}) };
+    const slots = [...(newProposals[member] || [DEFAULT_PROPOSAL, DEFAULT_PROPOSAL, DEFAULT_PROPOSAL])];
+    while (slots.length < 3) slots.push({ ...DEFAULT_PROPOSAL });
+    slots[slotIndex] = { ...slots[slotIndex], [field]: val };
+    newProposals[member] = slots;
+    updateCurrentMonthData({ eventProposals: newProposals });
+  };
+
+  const handleEventCommentChange = (member: string, val: string) => {
+    const newComments = { ...(currentMonthData.eventComments || {}), [member]: val };
+    updateCurrentMonthData({ eventComments: newComments });
   };
 
   const daysInMonth = getDaysInMonth(currentYear, currentMonth);
@@ -925,15 +891,14 @@ function App() {
           {[
             { id: 'schedule', label: 'スケジュール', icon: Calendar },
             { id: 'overall', label: '全体表示', icon: Info },
-            { id: 'goal', label: '目標管理', icon: Target },
-            { id: 'next', label: 'ネクストプラン', icon: Rocket },
+            { id: 'event', label: 'イベント案', icon: Lightbulb },
           ].map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
               className={`flex items-center gap-2 px-6 py-4 text-sm font-medium transition-all border-b-2 whitespace-nowrap ${
-                activeTab === tab.id 
-                  ? 'text-accent border-accent font-bold bg-accent/5' 
+                activeTab === tab.id
+                  ? 'text-accent border-accent font-bold bg-accent/5'
                   : 'text-text2 border-transparent hover:text-accent hover:bg-bg'
               }`}
             >
@@ -1126,276 +1091,113 @@ function App() {
             </motion.div>
           )}
 
-          {activeTab === 'goal' && (
+          {activeTab === 'event' && (
             <motion.div
-              key="goal"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="space-y-6"
-            >
-              {/* Team Goal */}
-              <div className="bg-white rounded-xl shadow-sm p-5 border border-border">
-                <div className="flex items-center gap-2 text-sm font-bold text-text mb-3">
-                  <div className="w-1 h-4 bg-accent rounded-full" />
-                  {currentMonth + 1}月の全体目標
-                </div>
-                <p className="text-xs text-text2 mb-4">チーム全体で達成を目指す今月の目標を記入してください。</p>
-                <LocalTextarea
-                  className="w-full border border-border2 rounded-lg p-3 text-sm bg-bg focus:bg-white focus:border-accent focus:ring-2 focus:ring-accent/10 outline-none min-h-[120px] transition-all leading-relaxed"
-                  placeholder="例：研修全9項目の修了率100%達成、イベントメンバー全員参加、外販ミステリー全員実施..."
-                  value={currentMonthData.teamGoal}
-                  onChange={(val: string) => updateCurrentMonthData({ teamGoal: val })}
-                />
-                <div className="flex items-center gap-3 mt-3">
-                  <button 
-                    onClick={handleTeamGoalSave}
-                    className="bg-accent hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-semibold shadow-md transition-all flex items-center gap-2"
-                  >
-                    <Save size={16} />
-                    保存する
-                  </button>
-                  {showSaveOk['team-goal'] && (
-                    <span className="text-xs text-green-600 font-medium animate-in fade-in slide-in-from-left-2">✓ 保存しました</span>
-                  )}
-                </div>
-              </div>
-
-              {/* Individual Goals */}
-              <div className="space-y-4">
-                <MemberTabs 
-                  members={MEMBERS} 
-                  current={currentGoalMember} 
-                  onSelect={setCurrentGoalMember} 
-                />
-                
-                <div className="bg-white rounded-xl shadow-sm p-5 border border-border">
-                  <div className="flex items-center gap-2 text-sm font-bold text-text mb-4">
-                    <div className="w-1 h-4 bg-accent rounded-full" />
-                    個人目標管理
-                  </div>
-
-                  <div className="hidden lg:block overflow-x-auto">
-                    <table className="w-full text-xs border-collapse">
-                      <thead>
-                        <tr className="bg-accent-l text-accent">
-                          <th className="p-2 text-left border border-border font-bold w-[30%]">目標内容</th>
-                          <th className="p-2 text-left border border-border font-bold w-[12%]">担当者</th>
-                          <th className="p-2 text-left border border-border font-bold w-[13%]">期限</th>
-                          <th className="p-2 text-left border border-border font-bold w-[15%]">達成度</th>
-                          <th className="p-2 text-left border border-border font-bold w-[22%]">備考</th>
-                          <th className="p-2 text-center border border-border font-bold w-[8%]">操作</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(Array.isArray(currentMonthData.goals[currentGoalMember]) ? currentMonthData.goals[currentGoalMember] : []).map((row, idx) => (
-                          <tr key={idx} className={idx % 2 === 1 ? 'bg-bg/50' : ''}>
-                            <td className="p-1.5 border border-border">
-                              <LocalInput 
-                                type="text" 
-                                className="w-full p-2 rounded border border-border bg-bg focus:bg-white focus:border-accent outline-none text-sm"
-                                value={row.content}
-                                onChange={(val: string) => handleIndividualGoalChange(currentGoalMember, idx, 'content', val)}
-                                placeholder="目標内容を入力"
-                              />
-                            </td>
-                            <td className="p-1.5 border border-border">
-                              <LocalInput 
-                                type="text" 
-                                className="w-full p-2 rounded border border-border bg-bg focus:bg-white focus:border-accent outline-none text-sm"
-                                value={row.person}
-                                onChange={(val: string) => handleIndividualGoalChange(currentGoalMember, idx, 'person', val)}
-                                placeholder="担当者"
-                              />
-                            </td>
-                            <td className="p-1.5 border border-border">
-                              <input 
-                                type="date" 
-                                className="w-full p-2 rounded border border-border bg-bg focus:bg-white focus:border-accent outline-none text-sm"
-                                value={row.deadline}
-                                onChange={(e) => handleIndividualGoalChange(currentGoalMember, idx, 'deadline', e.target.value)}
-                              />
-                            </td>
-                            <td className="p-1.5 border border-border">
-                              <div className="flex gap-0.5">
-                                {[1, 2, 3, 4, 5].map(star => (
-                                  <button
-                                    key={star}
-                                    onClick={() => handleIndividualGoalChange(currentGoalMember, idx, 'stars', star)}
-                                    className={`transition-colors ${row.stars >= star ? 'text-amber-500' : 'text-gray-300'}`}
-                                  >
-                                    <Star size={16} fill={row.stars >= star ? 'currentColor' : 'none'} />
-                                  </button>
-                                ))}
-                              </div>
-                            </td>
-                            <td className="p-1.5 border border-border">
-                              <LocalInput 
-                                type="text" 
-                                className="w-full p-2 rounded border border-border bg-bg focus:bg-white focus:border-accent outline-none text-sm"
-                                value={row.note}
-                                onChange={(val: string) => handleIndividualGoalChange(currentGoalMember, idx, 'note', val)}
-                                placeholder="備考"
-                              />
-                            </td>
-                            <td className="p-1.5 border border-border text-center">
-                              <button 
-                                onClick={() => deleteGoalRow(currentGoalMember, idx)}
-                                className="text-red-500 hover:bg-red-50 p-2 rounded transition-colors"
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  {/* Mobile Card Layout */}
-                  <div className="lg:hidden space-y-4">
-                    {(Array.isArray(currentMonthData.goals[currentGoalMember]) ? currentMonthData.goals[currentGoalMember] : []).map((row, idx) => (
-                      <div key={idx} className="p-4 rounded-xl border border-border bg-bg/30 space-y-3 relative">
-                        <button 
-                          onClick={() => deleteGoalRow(currentGoalMember, idx)}
-                          className="absolute top-3 right-3 text-red-500 p-2 hover:bg-red-50 rounded-full transition-colors"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-
-                        <div>
-                          <label className="block text-[10px] font-bold text-text2 mb-1 uppercase tracking-wider">目標内容</label>
-                          <LocalInput 
-                            type="text" 
-                            className="w-full p-3 rounded-lg border border-border bg-white focus:border-accent outline-none text-sm font-medium shadow-sm"
-                            value={row.content}
-                            onChange={(val: string) => handleIndividualGoalChange(currentGoalMember, idx, 'content', val)}
-                            placeholder="目標内容を入力"
-                          />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-[10px] font-bold text-text2 mb-1 uppercase tracking-wider">担当者</label>
-                            <LocalInput 
-                              type="text" 
-                              className="w-full p-3 rounded-lg border border-border bg-white focus:border-accent outline-none text-sm font-medium shadow-sm"
-                              value={row.person}
-                              onChange={(val: string) => handleIndividualGoalChange(currentGoalMember, idx, 'person', val)}
-                              placeholder="担当者"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-[10px] font-bold text-text2 mb-1 uppercase tracking-wider">期限</label>
-                            <input 
-                              type="date" 
-                              className="w-full p-3 rounded-lg border border-border bg-white focus:border-accent outline-none text-sm font-medium shadow-sm"
-                              value={row.deadline}
-                              onChange={(e) => handleIndividualGoalChange(currentGoalMember, idx, 'deadline', e.target.value)}
-                            />
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between pt-1">
-                          <div>
-                            <label className="block text-[10px] font-bold text-text2 mb-1 uppercase tracking-wider">達成度</label>
-                            <div className="flex gap-1.5">
-                              {[1, 2, 3, 4, 5].map(star => (
-                                <button
-                                  key={star}
-                                  onClick={() => handleIndividualGoalChange(currentGoalMember, idx, 'stars', star)}
-                                  className={`transition-colors ${row.stars >= star ? 'text-amber-500' : 'text-gray-300'}`}
-                                >
-                                  <Star size={22} fill={row.stars >= star ? 'currentColor' : 'none'} />
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="block text-[10px] font-bold text-text2 mb-1 uppercase tracking-wider">備考</label>
-                          <LocalInput 
-                            type="text" 
-                            className="w-full p-3 rounded-lg border border-border bg-white focus:border-accent outline-none text-sm font-medium shadow-sm"
-                            value={row.note}
-                            onChange={(val: string) => handleIndividualGoalChange(currentGoalMember, idx, 'note', val)}
-                            placeholder="備考"
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <button 
-                    onClick={() => addGoalRow(currentGoalMember)}
-                    className="mt-3 flex items-center gap-1.5 px-4 py-2 rounded-lg border border-dashed border-accent-m bg-accent-l text-accent text-xs font-bold hover:bg-accent hover:text-white hover:border-accent transition-all"
-                  >
-                    <Plus size={14} />
-                    行を追加
-                  </button>
-
-                  <div className="flex items-center gap-3 mt-5">
-                    <button 
-                      onClick={() => handleGoalSave(currentGoalMember)}
-                      className="bg-accent hover:bg-blue-700 text-white px-5 py-2 rounded-lg text-sm font-semibold shadow-md transition-all flex items-center gap-2"
-                    >
-                      <Save size={16} />
-                      保存する
-                    </button>
-                    {showSaveOk['goal'] && (
-                      <span className="text-xs text-green-600 font-medium animate-in fade-in slide-in-from-left-2">✓ 保存しました</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          )}
-
-          {activeTab === 'next' && (
-            <motion.div
-              key="next"
+              key="event"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               className="space-y-4"
             >
-              <div className="bg-white rounded-xl shadow-sm p-5 border border-border">
-                <div className="flex items-center gap-2 text-sm font-bold text-text mb-2">
-                  <div className="w-1 h-4 bg-accent rounded-full" />
-                  来月のネクストプラン
-                </div>
-                <p className="text-xs text-text2 mb-5">各メンバーが来月に向けた取り組み・目標・アクションプランを自由に記入してください。</p>
+              <MemberTabs
+                members={MEMBERS}
+                current={currentEventMember}
+                onSelect={setCurrentEventMember}
+              />
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {MEMBERS.map(name => (
-                    <div key={name} className="bg-white border border-border rounded-xl p-4 shadow-sm hover:shadow-md transition-shadow">
-                      <div className="flex items-center gap-2 text-xs font-bold text-accent mb-2">
-                        <div className="w-2 h-2 rounded-full bg-accent" />
-                        {name.replace('　', '')}
+              <div className="space-y-4">
+                {[0, 1, 2].map(slotIndex => {
+                  const proposals = currentMonthData.eventProposals?.[currentEventMember] || [];
+                  const proposal: EventProposal = proposals[slotIndex] || { ...DEFAULT_PROPOSAL };
+                  return (
+                    <div key={slotIndex} className="bg-white rounded-xl shadow-sm p-5 border border-border">
+                      <div className="flex items-center gap-2 text-sm font-bold text-text mb-4">
+                        <div className="w-1 h-4 bg-accent rounded-full" />
+                        案 {slotIndex + 1}
                       </div>
-                      <LocalTextarea
-                        className="w-full border border-border rounded-lg p-2.5 text-xs bg-bg focus:bg-white focus:border-accent outline-none min-h-[100px] transition-all leading-relaxed"
-                        placeholder="来月の取り組み・目標・アクションプランを自由に記入..."
-                        value={currentMonthData.nextPlan[name] || ''}
-                        onChange={(val: string) => handleNextPlanChange(name, val)}
-                      />
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[10px] font-bold text-text2 mb-1 uppercase tracking-wider">イベント名</label>
+                          <LocalInput
+                            type="text"
+                            className="w-full p-2.5 rounded-lg border border-border bg-bg focus:bg-white focus:border-accent outline-none text-sm"
+                            value={proposal.eventName}
+                            onChange={(val: string) => handleEventProposalChange(currentEventMember, slotIndex, 'eventName', val)}
+                            placeholder="イベント名を入力"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-text2 mb-1 uppercase tracking-wider">費用</label>
+                          <LocalInput
+                            type="text"
+                            className="w-full p-2.5 rounded-lg border border-border bg-bg focus:bg-white focus:border-accent outline-none text-sm"
+                            value={proposal.cost}
+                            onChange={(val: string) => handleEventProposalChange(currentEventMember, slotIndex, 'cost', val)}
+                            placeholder="例：5,000円"
+                          />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="block text-[10px] font-bold text-text2 mb-1 uppercase tracking-wider">概要</label>
+                          <LocalTextarea
+                            className="w-full p-2.5 rounded-lg border border-border bg-bg focus:bg-white focus:border-accent outline-none text-sm min-h-[80px] resize-none"
+                            value={proposal.overview}
+                            onChange={(val: string) => handleEventProposalChange(currentEventMember, slotIndex, 'overview', val)}
+                            placeholder="イベントの概要を入力"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-text2 mb-1 uppercase tracking-wider">必要なもの</label>
+                          <LocalTextarea
+                            className="w-full p-2.5 rounded-lg border border-border bg-bg focus:bg-white focus:border-accent outline-none text-sm min-h-[80px] resize-none"
+                            value={proposal.required}
+                            onChange={(val: string) => handleEventProposalChange(currentEventMember, slotIndex, 'required', val)}
+                            placeholder="必要な機材・人員など"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-text2 mb-1 uppercase tracking-wider">会場選択</label>
+                          <div className="flex gap-6 pt-2">
+                            {(['量販店', 'モール'] as const).map(v => (
+                              <label key={v} className="flex items-center gap-2 cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name={`venue-${currentEventMember}-${slotIndex}`}
+                                  value={v}
+                                  checked={proposal.venue === v}
+                                  onChange={() => handleEventProposalChange(currentEventMember, slotIndex, 'venue', v)}
+                                  className="accent-accent w-4 h-4"
+                                />
+                                <span className="text-sm font-medium text-text">{v}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="block text-[10px] font-bold text-text2 mb-1 uppercase tracking-wider">メモ</label>
+                          <LocalTextarea
+                            className="w-full p-2.5 rounded-lg border border-border bg-bg focus:bg-white focus:border-accent outline-none text-sm min-h-[80px] resize-none"
+                            value={proposal.memo}
+                            onChange={(val: string) => handleEventProposalChange(currentEventMember, slotIndex, 'memo', val)}
+                            placeholder="自由記入欄"
+                          />
+                        </div>
+                      </div>
                     </div>
-                  ))}
-                </div>
+                  );
+                })}
+              </div>
 
-                <div className="flex items-center gap-3 mt-6">
-                  <button 
-                    onClick={handleNextPlanSave}
-                    className="bg-accent hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg text-sm font-semibold shadow-md transition-all flex items-center gap-2"
-                  >
-                    <Save size={16} />
-                    全員分を保存する
-                  </button>
-                  {showSaveOk['next'] && (
-                    <span className="text-xs text-green-600 font-medium animate-in fade-in slide-in-from-left-2">✓ 保存しました</span>
-                  )}
+              <div className="bg-white rounded-xl shadow-sm p-5 border border-border">
+                <div className="flex items-center gap-2 text-sm font-bold text-text mb-3">
+                  <div className="w-1 h-4 bg-amber-400 rounded-full" />
+                  コメント（上司）
                 </div>
+                <LocalTextarea
+                  className="w-full p-3 rounded-lg border border-border bg-bg focus:bg-white focus:border-accent outline-none text-sm min-h-[100px] resize-none leading-relaxed"
+                  value={currentMonthData.eventComments?.[currentEventMember] || ''}
+                  onChange={(val: string) => handleEventCommentChange(currentEventMember, val)}
+                  placeholder="上司からのコメントを入力..."
+                />
               </div>
             </motion.div>
           )}
@@ -1421,7 +1223,7 @@ function App() {
                         <th className="p-2 border border-border font-bold sticky left-0 bg-accent-l z-10 w-12 text-center">日</th>
                         <th className="p-2 border border-border font-bold w-16 text-center">稼働数</th>
                         {MEMBERS.map(name => (
-                          <th key={name} className="p-2 border border-border font-bold text-center min-w-[100px]">
+                          <th key={name} className="p-2 border border-border font-bold text-center min-w-[72px]">
                             <div className="flex flex-col gap-1">
                               <span>{name.replace('　', '')}</span>
                               <LocalInput
@@ -1433,6 +1235,11 @@ function App() {
                             </div>
                           </th>
                         ))}
+                        {BOSS_MEMBERS.map(name => (
+                          <th key={name} className="p-2 border border-border font-bold text-center min-w-[72px] bg-amber-50/60">
+                            <span>{name.replace('　', '')}</span>
+                          </th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
@@ -1442,7 +1249,7 @@ function App() {
                         const isSat = dow === 5;
                         const isSun = dow === 6;
 
-                        // Calculate working count
+                        // Calculate working count (staff only, not bosses)
                         let workingCount = 0;
                         const memberStatuses = MEMBERS.map(name => {
                           const item = currentMonthData.schedule[name]?.[i] || { type: 'rest', detail: '' };
@@ -1451,6 +1258,10 @@ function App() {
                             workingCount++;
                           }
                           return { name, status: item.detail, type };
+                        });
+                        const bossStatuses = BOSS_MEMBERS.map(name => {
+                          const item = currentMonthData.schedule[name]?.[i] || { type: 'rest', detail: '' };
+                          return { name, status: item.detail, type: item.type };
                         });
 
                         return (
@@ -1465,6 +1276,27 @@ function App() {
                             </td>
                             {memberStatuses.map((m, idx) => (
                               <td key={idx} className="p-1 border border-border">
+                                <div className="flex flex-col gap-1">
+                                  <select
+                                    className={`w-full px-1 py-0.5 rounded-full text-[9px] font-bold outline-none border border-transparent focus:border-accent/30 transition-all ${TYPE_CLASS[m.type]}`}
+                                    value={m.type}
+                                    onChange={(e) => handleScheduleTypeChange(m.name, i, e.target.value as StatusType)}
+                                  >
+                                    {Object.keys(TYPE_LABEL).map(t => (
+                                      <option key={t} value={t}>{TYPE_LABEL[t as StatusType]}</option>
+                                    ))}
+                                  </select>
+                                  <LocalInput
+                                    className="w-full px-1 py-0.5 rounded border border-border text-[8px] outline-none focus:border-accent bg-white/50 focus:bg-white"
+                                    value={currentMonthData.schedule[m.name]?.[i]?.detail || ''}
+                                    onChange={(val: string) => handleScheduleDetailChange(m.name, i, val)}
+                                    placeholder="詳細..."
+                                  />
+                                </div>
+                              </td>
+                            ))}
+                            {bossStatuses.map((m, idx) => (
+                              <td key={`boss-${idx}`} className="p-1 border border-border bg-amber-50/30">
                                 <div className="flex flex-col gap-1">
                                   <select
                                     className={`w-full px-1 py-0.5 rounded-full text-[9px] font-bold outline-none border border-transparent focus:border-accent/30 transition-all ${TYPE_CLASS[m.type]}`}

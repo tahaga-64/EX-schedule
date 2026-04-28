@@ -42,6 +42,8 @@ export const TRAINING_LOCATIONS: Record<string, string> = {
 
 export const MEMBERS = Object.keys(INITIAL_SCHEDULE_DATA);
 
+export const BOSS_MEMBERS = ['櫻井　春人', '高田　将人'];
+
 export const getDaysInMonth = (year: number, month: number) => {
   return new Date(year, month + 1, 0).getDate();
 };
