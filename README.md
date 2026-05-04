@@ -1,20 +1,35 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# EX-schedule
 
-# Run and deploy your AI Studio app
+## 概要
+EX事業部におけるスケジュール管理の課題を解決するために開発したアプリです。
 
-This contains everything you need to run your app locally.
+従来はスプレッドシートで管理していましたが、
+「見づらい」「全体把握がしにくい」といった課題がありました。
 
-View your app in AI Studio: https://ai.studio/apps/e6c2ec46-2ca9-43b4-b057-65599668d27c
+本アプリでは、以下の機能を実装しています。
 
-## Run Locally
+## 主な機能
 
-**Prerequisites:**  Node.js
+- 個人ごとのカレンダー表示
+- 全体スケジュールの一覧表示（編集しやすい設計）
+- メンバーごとに企画案を保存できるイベント案ページ
+- 業務メモを記録・管理できるページ
 
+これにより、メンバーそれぞれがスケジュールを直感的に把握・管理できるようになりました。
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+---
+
+## 技術スタック
+
+- フロントエンド / アプリ構築: Google AI Studio
+- 実行環境: Node.js
+- パッケージ管理: npm
+- API: Gemini API（Google AI）
+
+---
+
+## セットアップ
+
+```bash
+npm install
+npm run dev
